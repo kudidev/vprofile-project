@@ -1,129 +1,126 @@
-def COLOR_MAP = [
-    'SUCCESS': 'good', 
-    'FAILURE': 'danger',
-]
-
 pipeline {
-	agent any
-	tools{
-		maven "MAVEN3"
-		jdk "oracleJDK11"
-	}
+    agent any
 	
 	environment {
-        NEXUS_VERSION = "nexus3"
-        NEXUS_PROTOCOL = "http"
-        NEXUS_URL = "nexus.clouddevhub.com:8081"
-        NEXUS_REPOSITORY = "vprofile-repo"
-		NEXUS_REPO_ID    = "vprofile-repo"
-        NEXUS_CREDENTIAL_ID = "nexuslogin"
-        ARTVERSION = "${env.BUILD_ID}"
+        clientRegistry = "repository.k8sengineers.com/apexrepo/client"
+        booksRegistry = "repository.k8sengineers.com/apexrepo/books"
+        mainRegistry = "repository.k8sengineers.com/apexrepo/main"
+        registryCredential = 'NexusRepoLogin'
+        cartRegistry = "https://repository.k8sengineers.com"
     }
 	
+	stages {
+	
+	  stage('Build Angular Image') {
+        when { changeset "client/*"}
+	     steps {
+		   
+		     script {
+                dockerImage = docker.build( clientRegistry + ":$BUILD_NUMBER", "./client/")
+             }
 
-	
-	stages{
-	
-		stage('Print error'){
-            steps{
-                sh 'fake comment'
+		 }
+	  
+	  }
+	  
+	  stage('Deploy Angular Image') {
+          when { changeset "client/*"}
+          steps{
+            script {
+              docker.withRegistry( cartRegistry, registryCredential ) {
+                dockerImage.push("$BUILD_NUMBER")
+                dockerImage.push('latest')
+              }
             }
+          }
+	   }
+
+       stage('Kubernetes Deploy Angular') {
+           when { changeset "client/*"}
+            steps {
+                  withCredentials([file(credentialsId: 'CartWheelKubeConfig1', variable: 'config')]){
+                    sh """
+                      export KUBECONFIG=\${config}
+                      pwd
+                      helm upgrade kubekart kkartchart --install --set "kkartcharts-frontend.image.client.tag=${BUILD_NUMBER}" --namespace kart
+                      """
+                  }
+                 }  
         }
-		
-		stage('Fetch Code'){
-			steps {
-				git branch: 'vp-rem', url:'https://github.com/kudidev/vprofile-project.git'
-			}
-		}
-		
-		stage('BUILD'){
-			steps {
-				sh 'mvn clean install -DskipTests'
-			}
-			
-			post  {
-				success {
-					echo 'Now Archiving..'
-					archiveArtifacts artifacts: '**/target/*.war'
-				}
-			}
-		}
-		
-		stage('UNIT TEST'){
-			steps{
-				sh 'mvn test' 
-			}
-		
-		}
-		
-		stage('Checkstyle Analysis'){
-			steps{
-				sh 'mvn checkstyle:checkstyle' 
-			}
-		
-		}
-		
-		stage ('Sonar Analysis'){
-			environment {
-				scannerHome = tool 'sonar4.7'    
-				
-			}
-			
-			steps {
-				withSonarQubeEnv('Sonarqube'){
-					 sh '''${scannerHome}/bin/sonar-scanner -Dsonar.projectKey=vprofile \
-					-Dsonar.projectName=vprofile \
-					-Dsonar.projectVersion=1.0 \
-					-Dsonar.sources=src/ \
-					-Dsonar.java.binaries=target/test-classes/com/visualpathit/account/controllerTest/ \
-					-Dsonar.junit.reportsPath=target/surefire-reports/ \
-					-Dsonar.jacoco.reportsPath=target/jacoco.exec \
-					-Dsonar.java.checkstyle.reportPaths=target/checkstyle-result.xml'''
-				}	
-			}
-		}
-		
-		stage ("Quality Gate"){
-			steps {
-				timeout(time: 1, unit: 'HOURS') {
-					waitForQualityGate abortPipeline: true
-				
-				}
-			
-			}
-		}
-		
-        stage("UploadArtifact"){
-            steps{
-                nexusArtifactUploader(
-                  nexusVersion: 'nexus3',
-                  protocol: 'http',
-                  nexusUrl: 'nexus.clouddevhub.com:8081',
-                  groupId: 'QA',
-                  version: "Job-0${env.BUILD_ID}-[${env.BUILD_TIMESTAMP}]",
-                  repository: 'vprofile-repo',
-                  credentialsId: 'nexuslogin',
-                  artifacts: [
-                    [artifactId: 'vproapp',
-                     classifier: '',
-                     file: 'target/vprofile-v2.war',
-                     type: 'war']
-    ]
- )
+
+        stage('Build books Image') {
+        when { changeset "javaapi/*"}
+	     steps {
+		   
+		     script {
+                dockerImage = docker.build( booksRegistry + ":$BUILD_NUMBER", "./javaapi/")
+             }
+
+		 }
+	  
+	  }
+	  
+	  stage('Deploy books Image') {
+          when { changeset "javaapi/*"}
+          steps{
+            script {
+              docker.withRegistry( cartRegistry, registryCredential ) {
+                dockerImage.push("$BUILD_NUMBER")
+                dockerImage.push('latest')
+              }
             }
-        
+          }
+	   }
 
+       stage('Kubernetes books Deploy') {
+           when { changeset "javaapi/*"}
+            steps {
+                  withCredentials([file(credentialsId: 'CartWheelKubeConfig1', variable: 'config')]){
+                    sh """
+                      export KUBECONFIG=\${config}
+                      pwd
+                      helm upgrade kubekart kkartchart --install --set "kkartcharts-backend.image.books.tag=${BUILD_NUMBER}" --namespace kart
+                      """
+                  }
+                 }  
+        }
 
-    }
-		
-		
+        stage('Build Main Image') {
+        when { changeset "nodeapi/*"}
+	     steps {
+		   
+		     script {
+                sh " sed -i 's/localhost/emongo/g' nodeapi/config/keys.js"
+                dockerImage = docker.build( mainRegistry + ":$BUILD_NUMBER", "./nodeapi/")
+             }
+
+		 }
+	  
+	  }
+	  
+	  stage('Deploy Main Image') {
+          when { changeset "nodeapi/*"}
+          steps{
+            script {
+              docker.withRegistry( cartRegistry, registryCredential ) {
+                dockerImage.push("$BUILD_NUMBER")
+                dockerImage.push('latest')
+              }
+            }
+          }
+	   }
+
+       stage('Kubernetes Main Deploy') {
+           when { changeset "nodeapi/*"}
+            steps {
+                  withCredentials([file(credentialsId: 'CartWheelKubeConfig1', variable: 'config')]){
+                    sh """
+                      export KUBECONFIG=\${config}
+                      pwd
+                      helm upgrade kubekart kkartchart --install --set "kkartcharts-backend.image.main.tag=${BUILD_NUMBER}" --namespace kart
+                      """
+                  }
+                 }  
+        }
 	}
-	post {
-      always {
-        echo 'Slack Notifications.'
-			slackSend channel: '#jenkinscicd',
-            color: COLOR_MAP[currentBuild.currentResult],
-             message: "*${currentBuild.currentResult}:* Job ${env.JOB_NAME} build ${env.BUILD_NUMBER} \n More info at: ${env.BUILD_URL}"
-        }
-    }
 }
