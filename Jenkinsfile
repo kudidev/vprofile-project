@@ -17,6 +17,7 @@ pipeline {
         ARTVERSION = "${env.BUILD_ID}"
     }
 	
+    
     stages{
         
         stage('BUILD'){
