@@ -14,7 +14,7 @@ pipeline {
         CENTRAL_REPO = "vpro-maven-centra"
 	    NEXUS_REPOGRP_ID    = "vpro-maven-group"
         NEXUS_CREDENTIAL_ID = "nexus-login"
-        ARTVERSION = "${env.BUILD_ID}-$${env.BUILD_TIMESTAMP}"
+        ARTVERSION = "${env.BUILD_ID}-${env.BUILD_TIMESTAMP}"
     }
 	
 
