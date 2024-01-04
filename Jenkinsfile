@@ -9,12 +9,12 @@ pipeline {
     environment {
         NEXUS_VERSION = "nexus3"
         NEXUS_PROTOCOL = "http"
-        NEXUS_URL = "54.237.96.51:8081"
+        NEXUS_URL = "54.196.207.129:8081"
         NEXUS_REPOSITORY = "vprofile-release"
         CENTRAL_REPO = "vpro-maven-centra"
 	    NEXUS_REPOGRP_ID    = "vpro-maven-group"
         NEXUS_CREDENTIAL_ID = "nexus-login"
-        ARTVERSION = "${env.BUILD_ID}"
+        ARTVERSION = "${env.BUILD_ID}-$${env.BUILD_TIMESTAMP}"
     }
 	
 
